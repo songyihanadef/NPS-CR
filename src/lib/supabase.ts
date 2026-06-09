@@ -10,9 +10,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// ─── 데이터 조회 ─────────────────────────────────────────────
+// ─── 데이터 조회 ──────────────────────────────────────────────────────────────
+// 정렬: is_pinned(true 우선) → created_at(최신순)
+// Supabase JS v2는 다중 컬럼 정렬을 체이닝으로 지원합니다.
 export async function fetchItems(category?: string, search?: string): Promise<NPSItem[]> {
-  let query = supabase.from('NPS').select('*').order('created_at', { ascending: false });
+  let query = supabase
+    .from('NPS')
+    .select('*')
+    .order('is_pinned', { ascending: false })   // true(1) → false(0)
+    .order('created_at', { ascending: false });  // 최신순
 
   if (category) query = query.eq('category', category);
   if (search) {
@@ -26,7 +32,7 @@ export async function fetchItems(category?: string, search?: string): Promise<NP
   return (data as NPSItem[]) ?? [];
 }
 
-// ─── 이미지 업로드 ───────────────────────────────────────────
+// ─── 이미지 업로드 ────────────────────────────────────────────────────────────
 const BUCKET = 'nps-images';
 
 export async function uploadPastedImages(files: File[]): Promise<string[]> {
@@ -49,7 +55,7 @@ export async function uploadPastedImages(files: File[]): Promise<string[]> {
   return urls;
 }
 
-// ─── 데이터 생성 ─────────────────────────────────────────────
+// ─── 데이터 생성 ──────────────────────────────────────────────────────────────
 export async function createItem(
   item: Omit<NPSItem, 'id' | 'created_at' | 'updated_at'>
 ): Promise<NPSItem> {
@@ -62,7 +68,7 @@ export async function createItem(
   return data as NPSItem;
 }
 
-// ─── 데이터 수정 ─────────────────────────────────────────────
+// ─── 데이터 수정 ──────────────────────────────────────────────────────────────
 export async function updateItem(
   id: number,
   item: Partial<Omit<NPSItem, 'id' | 'created_at'>>
@@ -77,7 +83,7 @@ export async function updateItem(
   return data as NPSItem;
 }
 
-// ─── 데이터 삭제 ─────────────────────────────────────────────
+// ─── 데이터 삭제 ──────────────────────────────────────────────────────────────
 export async function deleteItem(id: number): Promise<void> {
   const { error } = await supabase.from('NPS').delete().eq('id', id);
   if (error) throw error;

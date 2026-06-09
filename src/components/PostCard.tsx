@@ -18,6 +18,7 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   const images = item.image_urls?.filter(Boolean) ?? [];
+  const isPinned = item.is_pinned === true;
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -31,11 +32,15 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
 
   return (
     <>
-      <div className={`post-card ${expanded ? 'expanded' : ''}`}>
-        {/* ── 카드 헤더 ────────────────────────────── */}
+      <div className={`post-card ${expanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
+
+        {/* ── 카드 헤더 ──────────────────────────────────────── */}
         <div className="post-card-top" onClick={() => setExpanded((v) => !v)}>
           <div className="post-card-info">
-            <h3 className="post-title">{item.title}</h3>
+            <div className="post-title-row">
+              {isPinned && <span className="pin-badge">고정</span>}
+              <h3 className="post-title">{item.title}</h3>
+            </div>
             {item.description && <p className="post-desc">{item.description}</p>}
             <div className="post-meta">
               {item.author && <span>{item.author}</span>}
@@ -48,9 +53,10 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
           <span className={`expand-icon ${expanded ? 'open' : ''}`}>›</span>
         </div>
 
-        {/* ── 카드 본문 ────────────────────────────── */}
+        {/* ── 카드 본문 ──────────────────────────────────────── */}
         {expanded && (
           <div className="post-card-body">
+
             {/* 텍스트 본문 */}
             {item.content && (
               <div className="post-content">
@@ -96,7 +102,7 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
               </a>
             )}
 
-            {/* 수정/삭제 */}
+            {/* 수정 / 삭제 */}
             <div className="post-card-actions">
               <button
                 className="btn btn-sm btn-ghost"
@@ -111,29 +117,22 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
                 {confirmDelete ? '정말 삭제할까요?' : '삭제'}
               </button>
             </div>
+
           </div>
         )}
       </div>
 
-      {/* ── 라이트박스 ──────────────────────────────── */}
+      {/* ── 라이트박스 ─────────────────────────────────────────── */}
       {lightbox && (
-        <div
-          className="lightbox-overlay"
-          onClick={() => setLightbox(null)}
-        >
+        <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="닫기">✕</button>
           <img
-            src={lightbox}
-            alt="원본 이미지"
-            className="lightbox-img"
+            src={lightbox} alt="원본 이미지" className="lightbox-img"
             onClick={(e) => e.stopPropagation()}
           />
           <a
-            href={lightbox}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="lightbox-open-btn"
-            onClick={(e) => e.stopPropagation()}
+            href={lightbox} target="_blank" rel="noopener noreferrer"
+            className="lightbox-open-btn" onClick={(e) => e.stopPropagation()}
           >
             새 탭에서 열기 ↗
           </a>

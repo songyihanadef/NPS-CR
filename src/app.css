@@ -784,3 +784,89 @@ p { line-height: 1.7; }
   .paste-preview-add { width: 80px; height: 80px; }
   .lightbox-img { max-width: 95vw; }
 }
+
+/* ===== PINNED CARD ===== */
+
+/* 고정 카드: 왼쪽 테두리 강조 */
+.post-card.pinned {
+  border-left: 3px solid #10B981;
+}
+
+/* 고정 카드 펼침 시 테두리 유지 */
+.post-card.pinned.expanded {
+  border-color: #10B981;
+}
+
+/* 제목 행 (뱃지 + 텍스트 인라인 정렬) */
+.post-title-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.post-title-row .post-title {
+  margin-bottom: 0;
+}
+
+/* 고정 뱃지 */
+.pin-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #059669;
+  background: #d1fae5;
+  border: 1px solid #6ee7b7;
+  border-radius: 4px;
+  padding: 2px 6px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* 체크박스 필드 */
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.field-checkbox:hover {
+  border-color: #10B981;
+  background: #f0fdf4;
+}
+
+.checkbox-input {
+  width: 16px;
+  height: 16px;
+  accent-color: #10B981;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.pin-icon-sm {
+  font-size: 0.95rem;
+  line-height: 1;
+}

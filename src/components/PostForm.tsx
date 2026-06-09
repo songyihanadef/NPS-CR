@@ -8,15 +8,10 @@ interface PostFormProps {
   onCancel: () => void;
 }
 
-/** 클립보드 또는 File에서 미리보기 objectURL을 생성 */
 interface PreviewImage {
-  /** 고유 key (objectURL 또는 기존 URL) */
   key: string;
-  /** img src에 사용할 URL */
   src: string;
-  /** 새로 붙여넣은 파일 (기존 이미지면 undefined) */
   file?: File;
-  /** 기존 저장된 URL (기존 이미지면 있음) */
   savedUrl?: string;
 }
 
@@ -28,6 +23,7 @@ const emptyForm: NPSFormData = {
   link: '',
   author: '',
   image_urls: [],
+  is_pinned: false,
 };
 
 export const PostForm: React.FC<PostFormProps> = ({
@@ -46,7 +42,7 @@ export const PostForm: React.FC<PostFormProps> = ({
   const pasteZoneRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── 초기값 세팅 ─────────────────────────────────────────
+  // ── 초기값 세팅 ───────────────────────────────────────────────────────────
   useEffect(() => {
     if (initialData) {
       setForm({
@@ -57,8 +53,8 @@ export const PostForm: React.FC<PostFormProps> = ({
         link: initialData.link ?? '',
         author: initialData.author ?? '',
         image_urls: initialData.image_urls ?? [],
+        is_pinned: initialData.is_pinned ?? false,
       });
-      // 기존 이미지를 미리보기로 변환
       const existing: PreviewImage[] = (initialData.image_urls ?? []).map((url) => ({
         key: url,
         src: url,
@@ -69,7 +65,6 @@ export const PostForm: React.FC<PostFormProps> = ({
       setForm((f) => ({ ...f, category: defaultCategory }));
     }
     return () => {
-      // 언마운트 시 objectURL 해제
       setPreviews((prev) => {
         prev.forEach((p) => { if (p.file) URL.revokeObjectURL(p.src); });
         return [];
@@ -78,24 +73,20 @@ export const PostForm: React.FC<PostFormProps> = ({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 이미지 추가 헬퍼 ────────────────────────────────────
+  // ── 이미지 추가 헬퍼 ──────────────────────────────────────────────────────
   const addImageFiles = useCallback((files: File[]) => {
     const imageFiles = files.filter((f) => f.type.startsWith('image/'));
     if (!imageFiles.length) return;
-
     const newPreviews: PreviewImage[] = imageFiles.map((file) => {
       const src = URL.createObjectURL(file);
       return { key: src, src, file };
     });
-
     setPreviews((prev) => [...prev, ...newPreviews]);
-
-    // 플래시 효과
     setPasteFlash(true);
     setTimeout(() => setPasteFlash(false), 600);
   }, []);
 
-  // ── 전역 paste 이벤트 (모달 열린 동안 항상 감지) ────────
+  // ── 전역 paste 이벤트 ─────────────────────────────────────────────────────
   useEffect(() => {
     const handleGlobalPaste = (e: ClipboardEvent) => {
       const items = Array.from(e.clipboardData?.items ?? []);
@@ -105,19 +96,17 @@ export const PostForm: React.FC<PostFormProps> = ({
       const files = imageItems.map((it) => it.getAsFile()).filter(Boolean) as File[];
       addImageFiles(files);
     };
-
     window.addEventListener('paste', handleGlobalPaste);
     return () => window.removeEventListener('paste', handleGlobalPaste);
   }, [addImageFiles]);
 
-  // ── 파일 선택 (보조) ────────────────────────────────────
+  // ── 파일 선택 (보조) ──────────────────────────────────────────────────────
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    addImageFiles(files);
+    addImageFiles(Array.from(e.target.files ?? []));
     e.target.value = '';
   };
 
-  // ── 이미지 삭제 ─────────────────────────────────────────
+  // ── 이미지 삭제 ───────────────────────────────────────────────────────────
   const removeImage = (key: string) => {
     setPreviews((prev) => {
       const target = prev.find((p) => p.key === key);
@@ -126,27 +115,27 @@ export const PostForm: React.FC<PostFormProps> = ({
     });
   };
 
-  // ── 폼 필드 변경 ────────────────────────────────────────
+  // ── 텍스트 필드 변경 ──────────────────────────────────────────────────────
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  // ── 저장 ────────────────────────────────────────────────
+  // ── 체크박스 변경 ─────────────────────────────────────────────────────────
+  const handleCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm((f) => ({ ...f, [e.target.name]: e.target.checked }));
+  };
+
+  // ── 저장 ──────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.title.trim()) { setError('제목을 입력해주세요.'); return; }
-
     setLoading(true);
     setError('');
-
     try {
-      // 유지할 기존 이미지 URL
       const keptUrls = previews.filter((p) => p.savedUrl).map((p) => p.savedUrl as string);
-      // 새로 붙여넣은 File 목록
       const newFiles = previews.filter((p) => p.file).map((p) => p.file as File);
-
       await onSubmit({ ...form, image_urls: keptUrls }, newFiles);
     } catch {
       setError('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
@@ -166,6 +155,7 @@ export const PostForm: React.FC<PostFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="post-form">
+
           {/* 카테고리 */}
           <label className="field">
             <span>카테고리</span>
@@ -201,11 +191,9 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
-          {/* ── 이미지 붙여넣기 영역 ───────────────────── */}
+          {/* 이미지 붙여넣기 영역 */}
           <div className="field">
             <span>이미지</span>
-
-            {/* 붙여넣기 존 */}
             <div
               ref={pasteZoneRef}
               className={`paste-zone ${pasteFocus ? 'focused' : ''} ${pasteFlash ? 'flash' : ''}`}
@@ -227,45 +215,31 @@ export const PostForm: React.FC<PostFormProps> = ({
                       <img src={p.src} alt="미리보기" />
                       {p.file && <span className="preview-badge new">NEW</span>}
                       <button
-                        type="button"
-                        className="preview-remove"
-                        onClick={() => removeImage(p.key)}
-                        aria-label="이미지 삭제"
+                        type="button" className="preview-remove"
+                        onClick={() => removeImage(p.key)} aria-label="이미지 삭제"
                       >✕</button>
                     </div>
                   ))}
-                  {/* 빈 슬롯 – 클릭해서 파일 추가 */}
                   <div
                     className="paste-preview-add"
                     onClick={() => fileInputRef.current?.click()}
-                    role="button"
-                    tabIndex={0}
+                    role="button" tabIndex={0}
                     onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
                     aria-label="이미지 추가"
-                  >
-                    <span>+</span>
-                  </div>
+                  ><span>+</span></div>
                 </div>
               )}
             </div>
-
-            {/* 보조 파일 선택 */}
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: 'none' }}
-              onChange={handleFileInput}
+              ref={fileInputRef} type="file" accept="image/*" multiple
+              style={{ display: 'none' }} onChange={handleFileInput}
             />
             {newFilesCount > 0 && (
-              <p className="paste-count">
-                새 이미지 {newFilesCount}장이 추가되었습니다 (저장 시 업로드됩니다)
-              </p>
+              <p className="paste-count">새 이미지 {newFilesCount}장이 추가되었습니다 (저장 시 업로드됩니다)</p>
             )}
           </div>
 
-          {/* 링크 */}
+          {/* 관련 링크 */}
           <label className="field">
             <span>관련 링크</span>
             <input
@@ -283,16 +257,32 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
+          {/* ── 고정 여부 ──────────────────────────────────────────────────── */}
+          <label className="field-checkbox">
+            <input
+              type="checkbox"
+              name="is_pinned"
+              checked={form.is_pinned}
+              onChange={handleCheckbox}
+              className="checkbox-input"
+            />
+            <span className="checkbox-label">
+              <span className="pin-icon-sm">📌</span>
+              이 글을 최상단에 고정
+            </span>
+          </label>
+
           {error && <p className="form-error">{error}</p>}
 
           <div className="form-actions">
             <button type="button" className="btn btn-ghost" onClick={onCancel}>취소</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading
-                ? (newFilesCount > 0 ? `이미지 업로드 중...` : '저장 중...')
+                ? (newFilesCount > 0 ? '이미지 업로드 중...' : '저장 중...')
                 : initialData ? '수정 완료' : '등록하기'}
             </button>
           </div>
+
         </form>
       </div>
     </div>

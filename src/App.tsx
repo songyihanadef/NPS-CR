@@ -20,6 +20,7 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<NPSItem | null>(null);
 
+  // ── 목록 불러오기 ────────────────────────────────────────────────────────
   const loadItems = useCallback(async (category?: Category, query?: string) => {
     setLoading(true);
     setError('');
@@ -41,6 +42,7 @@ function App() {
     }
   }, [view, activeCategory, searchQuery, loadItems]);
 
+  // ── 네비게이션 ───────────────────────────────────────────────────────────
   const handleCategoryClick = (cat: Category) => {
     setActiveCategory(cat);
     setSearchQuery('');
@@ -62,19 +64,19 @@ function App() {
     setItems([]);
   };
 
-  // ── 저장 (이미지 업로드 포함) ───────────────────────────
+  // ── 저장 ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (data: NPSFormData, newImageFiles: File[]) => {
-    // 1. 새 이미지 파일을 Storage에 업로드
+    // 1) 새 이미지 Storage 업로드
     let uploadedUrls: string[] = [];
     if (newImageFiles.length > 0) {
       uploadedUrls = await uploadPastedImages(newImageFiles);
     }
 
-    // 2. 최종 image_urls = 기존 유지분 + 새 업로드 URL
+    // 2) 최종 image_urls 병합
     const finalImageUrls = [...data.image_urls, ...uploadedUrls];
     const payload = { ...data, image_urls: finalImageUrls };
 
-    // 3. DB 저장
+    // 3) DB 저장
     if (editingItem) {
       await updateItem(editingItem.id, payload);
     } else {
@@ -84,7 +86,7 @@ function App() {
     setShowForm(false);
     setEditingItem(null);
 
-    // 4. 목록 갱신
+    // 4) 목록 갱신
     if (view === 'category' && activeCategory) {
       loadItems(activeCategory, searchQuery || undefined);
     } else if (view === 'search') {
@@ -92,10 +94,7 @@ function App() {
     }
   };
 
-  const handleEdit = (item: NPSItem) => {
-    setEditingItem(item);
-    setShowForm(true);
-  };
+  const handleEdit = (item: NPSItem) => { setEditingItem(item); setShowForm(true); };
 
   const handleDelete = async (id: number) => {
     try {
@@ -106,14 +105,13 @@ function App() {
     }
   };
 
-  const handleNewPost = () => {
-    setEditingItem(null);
-    setShowForm(true);
-  };
+  const handleNewPost = () => { setEditingItem(null); setShowForm(true); };
 
+  // ── 렌더 ─────────────────────────────────────────────────────────────────
   return (
     <div className="app">
-      {/* ── 홈 ─────────────────────────────────────────── */}
+
+      {/* ══ 홈 ═══════════════════════════════════════════════════════════════ */}
       {view === 'home' && (
         <main className="home">
           <div className="home-hero">
@@ -122,11 +120,7 @@ function App() {
               네플스 소재 제작에 필요한 기준과 피그마 작업 팁,<br />
               플러그인 사용법을 카테고리별로 확인하세요.
             </p>
-            <SearchBar
-              placeholder="전체 가이드 검색..."
-              onSearch={handleHomeSearch}
-              size="large"
-            />
+            <SearchBar placeholder="전체 가이드 검색..." onSearch={handleHomeSearch} size="large" />
           </div>
 
           <div className="category-grid">
@@ -152,7 +146,7 @@ function App() {
         </main>
       )}
 
-      {/* ── 카테고리 상세 ───────────────────────────────── */}
+      {/* ══ 카테고리 상세 ════════════════════════════════════════════════════ */}
       {view === 'category' && activeCategory && (
         <main className="detail-view">
           <div className="detail-header">
@@ -190,7 +184,7 @@ function App() {
         </main>
       )}
 
-      {/* ── 검색 결과 ───────────────────────────────────── */}
+      {/* ══ 검색 결과 ════════════════════════════════════════════════════════ */}
       {view === 'search' && (
         <main className="detail-view">
           <div className="detail-header">
@@ -229,7 +223,7 @@ function App() {
         </main>
       )}
 
-      {/* ── 폼 모달 ─────────────────────────────────────── */}
+      {/* ══ 글 등록/수정 폼 ══════════════════════════════════════════════════ */}
       {showForm && (
         <PostForm
           initialData={editingItem ?? undefined}

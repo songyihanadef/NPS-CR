@@ -43,6 +43,7 @@ export interface NPSItem {
   link: string | null;
   author: string | null;
   image_urls: string[] | null;
+  is_pinned: boolean;
   created_at: string;
   updated_at: string | null;
 }
@@ -55,4 +56,5 @@ export interface NPSFormData {
   link: string;
   author: string;
   image_urls: string[];
+  is_pinned: boolean;
 }
