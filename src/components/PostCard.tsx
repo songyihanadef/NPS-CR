@@ -12,6 +12,10 @@ function formatDate(str: string) {
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function isHttpUrl(value: string) {
+  return /^https?:\/\//i.test(value.trim());
+}
+
 export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -89,17 +93,24 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
               </div>
             )}
 
-            {/* 링크 */}
+            {/* 관련 링크/텍스트 */}
             {item.link && (
-              <a
-                href={item.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="post-link"
-                onClick={(e) => e.stopPropagation()}
-              >
-                🔗 관련 링크 바로가기
-              </a>
+              isHttpUrl(item.link) ? (
+                <a
+                  href={item.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="post-link"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  🔗 관련 링크 바로가기
+                </a>
+              ) : (
+                <div className="post-link-text" onClick={(e) => e.stopPropagation()}>
+                  <span className="post-link-label">관련 링크</span>
+                  <span>{item.link}</span>
+                </div>
+              )
             )}
 
             {/* 수정 / 삭제 */}

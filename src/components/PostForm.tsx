@@ -38,6 +38,7 @@ export const PostForm: React.FC<PostFormProps> = ({
   const [error, setError] = useState('');
   const [pasteFocus, setPasteFocus] = useState(false);
   const [pasteFlash, setPasteFlash] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
 
   const pasteZoneRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -75,8 +76,15 @@ export const PostForm: React.FC<PostFormProps> = ({
 
   // ── 이미지 추가 헬퍼 ──────────────────────────────────────────────────────
   const addImageFiles = useCallback((files: File[]) => {
-    const imageFiles = files.filter((f) => f.type.startsWith('image/'));
-    if (!imageFiles.length) return;
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const imageFiles = files.filter((f) => allowedTypes.includes(f.type));
+
+    if (!imageFiles.length) {
+      setError('jpg, jpeg, png, webp 이미지 파일만 추가할 수 있습니다.');
+      return;
+    }
+
+    setError('');
     const newPreviews: PreviewImage[] = imageFiles.map((file) => {
       const src = URL.createObjectURL(file);
       return { key: src, src, file };
@@ -85,6 +93,26 @@ export const PostForm: React.FC<PostFormProps> = ({
     setPasteFlash(true);
     setTimeout(() => setPasteFlash(false), 600);
   }, []);
+
+  // ── 드래그 앤 드롭 이미지 추가 ───────────────────────────────────────────────
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    addImageFiles(Array.from(e.dataTransfer.files ?? []));
+  };
 
   // ── 전역 paste 이벤트 ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -196,17 +224,20 @@ export const PostForm: React.FC<PostFormProps> = ({
             <span>이미지</span>
             <div
               ref={pasteZoneRef}
-              className={`paste-zone ${pasteFocus ? 'focused' : ''} ${pasteFlash ? 'flash' : ''}`}
+              className={`paste-zone ${pasteFocus ? 'focused' : ''} ${pasteFlash ? 'flash' : ''} ${dragOver ? 'drag-over' : ''}`}
               tabIndex={0}
               onFocus={() => setPasteFocus(true)}
               onBlur={() => setPasteFocus(false)}
-              aria-label="이미지 붙여넣기 영역"
+              aria-label="이미지 붙여넣기 및 드래그 앤 드롭 영역"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
               {previews.length === 0 ? (
                 <div className="paste-zone-empty">
                   <span className="paste-icon">📋</span>
-                  <p>캡처 이미지는 이 영역에 <strong>Ctrl+V</strong>로 붙여넣을 수 있습니다.</p>
-                  <p className="paste-hint">폼이 열려 있는 동안 어디서든 Ctrl+V가 동작합니다</p>
+                  <p>캡처 이미지는 <strong>Ctrl+V</strong>로 붙여넣거나 이미지 파일을 드래그해서 추가할 수 있습니다.</p>
+                  <p className="paste-hint">jpg, png, webp 파일을 여러 장 드래그해도 됩니다</p>
                 </div>
               ) : (
                 <div className="paste-preview-grid">
@@ -231,7 +262,7 @@ export const PostForm: React.FC<PostFormProps> = ({
               )}
             </div>
             <input
-              ref={fileInputRef} type="file" accept="image/*" multiple
+              ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple
               style={{ display: 'none' }} onChange={handleFileInput}
             />
             {newFilesCount > 0 && (
@@ -243,8 +274,8 @@ export const PostForm: React.FC<PostFormProps> = ({
           <label className="field">
             <span>관련 링크</span>
             <input
-              name="link" type="url" value={form.link} onChange={handleChange}
-              placeholder="https://..."
+              name="link" type="text" value={form.link} onChange={handleChange}
+              placeholder="관련 링크, Figma 경로, 메모 등을 입력하세요"
             />
           </label>
 

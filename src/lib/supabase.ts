@@ -35,16 +35,24 @@ export async function fetchItems(category?: string, search?: string): Promise<NP
 // ─── 이미지 업로드 ────────────────────────────────────────────────────────────
 const BUCKET = 'nps-images';
 
+function getImageExtension(file: File) {
+  if (file.type === 'image/jpeg') return 'jpg';
+  if (file.type === 'image/png') return 'png';
+  if (file.type === 'image/webp') return 'webp';
+  return 'png';
+}
+
 export async function uploadPastedImages(files: File[]): Promise<string[]> {
   const urls: string[] = [];
 
   for (const file of files) {
     const randomSuffix = Math.random().toString(36).slice(2, 8);
-    const fileName = `post-images/${Date.now()}-${randomSuffix}.png`;
+    const extension = getImageExtension(file);
+    const fileName = `post-images/${Date.now()}-${randomSuffix}.${extension}`;
 
     const { error: uploadError } = await supabase.storage
       .from(BUCKET)
-      .upload(fileName, file, { contentType: 'image/png', upsert: false });
+      .upload(fileName, file, { contentType: file.type || 'image/png', upsert: false });
 
     if (uploadError) throw uploadError;
 

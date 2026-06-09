@@ -339,6 +339,28 @@ p { line-height: 1.7; }
 }
 .post-link:hover { background: #dde9ff; }
 
+.post-link-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: var(--bg);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  line-height: 1.55;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.post-link-label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
 .post-card-actions {
   display: flex;
   gap: 8px;
@@ -568,6 +590,12 @@ p { line-height: 1.7; }
   border-color: #10B981;
   background: #f0fdf4;
   box-shadow: 0 0 0 3px rgba(16,185,129,.15);
+}
+
+.paste-zone.drag-over {
+  border-color: var(--accent-blue);
+  background: var(--accent-blue-light);
+  box-shadow: 0 0 0 3px rgba(79,127,250,.16);
 }
 
 .paste-zone-empty {

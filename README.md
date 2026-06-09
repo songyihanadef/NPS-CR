@@ -1,78 +1,20 @@
-# 네플스 작업 가이드 (NPS Guide)
+# NPS CR Guide
 
-Vite + React + TypeScript + Supabase 기반의 네플스 작업 가이드 페이지입니다.
+## 이번 수정 반영
+- 관련 링크 입력칸을 URL 전용(type=url)에서 일반 텍스트(type=text)로 변경했습니다.
+- 관련 링크가 `http://` 또는 `https://`로 시작하면 클릭 가능한 링크로 표시합니다.
+- URL 형식이 아니면 입력한 텍스트 그대로 카드 상세에 표시합니다.
+- 이미지 영역에 Ctrl+V 붙여넣기 기능은 유지했습니다.
+- 이미지 영역에 jpg/png/webp 파일을 드래그 앤 드롭해서 추가할 수 있게 했습니다.
+- 여러 이미지를 한 번에 드래그해서 추가할 수 있습니다.
+- 이미지 업로드 시 파일 확장자와 content-type을 보존하도록 수정했습니다.
 
-## 폴더 구조
+## 배포 방법
+1. GitHub 레포에 이 ZIP 안의 파일들을 그대로 덮어쓰기 업로드합니다.
+2. Commit changes를 누릅니다.
+3. Vercel에서 자동 배포가 Ready 상태인지 확인합니다.
 
-```txt
-nps-guide
-├ package.json
-├ index.html
-├ vite.config.ts
-├ tsconfig.json
-├ tsconfig.node.json
-├ .env.example
-├ .gitignore
-├ supabase.sql
-└ src
-   ├ main.tsx
-   ├ App.tsx
-   ├ app.css
-   ├ types
-   │  └ index.ts
-   ├ lib
-   │  └ supabase.ts
-   └ components
-      ├ PostCard.tsx
-      ├ PostForm.tsx
-      └ SearchBar.tsx
-```
-
-## Supabase 세팅
-
-1. Supabase 프로젝트 접속
-2. SQL Editor 실행
-3. `supabase.sql` 전체 실행
-4. Project Settings → API에서 아래 2개 값 확인
-   - Project URL
-   - anon public key
-
-## 로컬 환경변수
-
-`.env.example`을 복사해서 `.env`로 만들고 실제 값을 넣습니다.
-
-```env
-VITE_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=xxxxxxxxxxxx
-```
-
-## Vercel 환경변수
-
-Vercel 프로젝트 생성 후 Settings → Environment Variables에 아래 2개를 추가합니다.
-
-```txt
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-```
-
-## 실행
-
-```bash
-npm install
-npm run dev
-```
-
-## 빌드
-
-```bash
-npm run build
-```
-
-## 기능
-
-- 홈 화면: 카테고리 카드 4개 + 전체 검색
-- 카테고리 상세: 해당 카테고리 글 목록, 검색, 새 글 등록
-- 글 카드: 상세 펼침, 수정, 삭제
-- Supabase 테이블명: `NPS`
-- 관리자 비밀번호 없음
-- 썸네일 이미지 없음
+## 주의
+- `.env.example`은 예시 파일입니다. 실제 Vercel 환경변수에는 아래 두 값을 넣어야 합니다.
+  - VITE_SUPABASE_URL
+  - VITE_SUPABASE_ANON_KEY
