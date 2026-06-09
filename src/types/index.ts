@@ -42,6 +42,7 @@ export interface NPSItem {
   content: string | null;
   link: string | null;
   author: string | null;
+  image_urls: string[] | null;
   created_at: string;
   updated_at: string | null;
 }
@@ -53,4 +54,5 @@ export interface NPSFormData {
   content: string;
   link: string;
   author: string;
+  image_urls: string[];
 }

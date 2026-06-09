@@ -10,6 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+// ─── 데이터 조회 ─────────────────────────────────────────────
 export async function fetchItems(category?: string, search?: string): Promise<NPSItem[]> {
   let query = supabase.from('NPS').select('*').order('created_at', { ascending: false });
 
@@ -25,6 +26,30 @@ export async function fetchItems(category?: string, search?: string): Promise<NP
   return (data as NPSItem[]) ?? [];
 }
 
+// ─── 이미지 업로드 ───────────────────────────────────────────
+const BUCKET = 'nps-images';
+
+export async function uploadPastedImages(files: File[]): Promise<string[]> {
+  const urls: string[] = [];
+
+  for (const file of files) {
+    const randomSuffix = Math.random().toString(36).slice(2, 8);
+    const fileName = `post-images/${Date.now()}-${randomSuffix}.png`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(fileName, file, { contentType: 'image/png', upsert: false });
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage.from(BUCKET).getPublicUrl(fileName);
+    urls.push(data.publicUrl);
+  }
+
+  return urls;
+}
+
+// ─── 데이터 생성 ─────────────────────────────────────────────
 export async function createItem(
   item: Omit<NPSItem, 'id' | 'created_at' | 'updated_at'>
 ): Promise<NPSItem> {
@@ -37,6 +62,7 @@ export async function createItem(
   return data as NPSItem;
 }
 
+// ─── 데이터 수정 ─────────────────────────────────────────────
 export async function updateItem(
   id: number,
   item: Partial<Omit<NPSItem, 'id' | 'created_at'>>
@@ -51,6 +77,7 @@ export async function updateItem(
   return data as NPSItem;
 }
 
+// ─── 데이터 삭제 ─────────────────────────────────────────────
 export async function deleteItem(id: number): Promise<void> {
   const { error } = await supabase.from('NPS').delete().eq('id', id);
   if (error) throw error;

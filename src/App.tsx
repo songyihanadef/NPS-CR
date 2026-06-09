@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchItems, createItem, updateItem, deleteItem } from './lib/supabase';
+import {
+  fetchItems, createItem, updateItem, deleteItem, uploadPastedImages,
+} from './lib/supabase';
 import { CATEGORIES, CATEGORY_META, type Category, type NPSItem, type NPSFormData } from './types';
 import { PostCard } from './components/PostCard';
 import { PostForm } from './components/PostForm';
@@ -18,21 +20,18 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<NPSItem | null>(null);
 
-  const loadItems = useCallback(
-    async (category?: Category, query?: string) => {
-      setLoading(true);
-      setError('');
-      try {
-        const data = await fetchItems(category, query);
-        setItems(data);
-      } catch {
-        setError('데이터를 불러오지 못했습니다. Supabase 연결을 확인해주세요.');
-      } finally {
-        setLoading(false);
-      }
-    },
-    []
-  );
+  const loadItems = useCallback(async (category?: Category, query?: string) => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchItems(category, query);
+      setItems(data);
+    } catch {
+      setError('데이터를 불러오지 못했습니다. Supabase 연결을 확인해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (view === 'category' && activeCategory) {
@@ -50,16 +49,11 @@ function App() {
 
   const handleHomeSearch = (query: string) => {
     setSearchQuery(query);
-    if (query.trim()) {
-      setView('search');
-    } else {
-      setView('home');
-    }
+    if (query.trim()) setView('search');
+    else setView('home');
   };
 
-  const handleCategorySearch = (query: string) => {
-    setSearchQuery(query);
-  };
+  const handleCategorySearch = (query: string) => setSearchQuery(query);
 
   const handleGoHome = () => {
     setView('home');
@@ -68,14 +62,29 @@ function App() {
     setItems([]);
   };
 
-  const handleSubmit = async (data: NPSFormData) => {
-    if (editingItem) {
-      await updateItem(editingItem.id, data);
-    } else {
-      await createItem(data);
+  // ── 저장 (이미지 업로드 포함) ───────────────────────────
+  const handleSubmit = async (data: NPSFormData, newImageFiles: File[]) => {
+    // 1. 새 이미지 파일을 Storage에 업로드
+    let uploadedUrls: string[] = [];
+    if (newImageFiles.length > 0) {
+      uploadedUrls = await uploadPastedImages(newImageFiles);
     }
+
+    // 2. 최종 image_urls = 기존 유지분 + 새 업로드 URL
+    const finalImageUrls = [...data.image_urls, ...uploadedUrls];
+    const payload = { ...data, image_urls: finalImageUrls };
+
+    // 3. DB 저장
+    if (editingItem) {
+      await updateItem(editingItem.id, payload);
+    } else {
+      await createItem(payload);
+    }
+
     setShowForm(false);
     setEditingItem(null);
+
+    // 4. 목록 갱신
     if (view === 'category' && activeCategory) {
       loadItems(activeCategory, searchQuery || undefined);
     } else if (view === 'search') {
@@ -104,7 +113,7 @@ function App() {
 
   return (
     <div className="app">
-      {/* HOME */}
+      {/* ── 홈 ─────────────────────────────────────────── */}
       {view === 'home' && (
         <main className="home">
           <div className="home-hero">
@@ -143,13 +152,11 @@ function App() {
         </main>
       )}
 
-      {/* CATEGORY DETAIL */}
+      {/* ── 카테고리 상세 ───────────────────────────────── */}
       {view === 'category' && activeCategory && (
         <main className="detail-view">
           <div className="detail-header">
-            <button className="btn btn-ghost back-btn" onClick={handleGoHome}>
-              ← 홈으로
-            </button>
+            <button className="btn btn-ghost back-btn" onClick={handleGoHome}>← 홈으로</button>
             <div className="detail-title-row">
               <span className="detail-icon">{CATEGORY_META[activeCategory].icon}</span>
               <div>
@@ -162,9 +169,7 @@ function App() {
                 placeholder={`"${activeCategory}" 내 검색...`}
                 onSearch={handleCategorySearch}
               />
-              <button className="btn btn-primary" onClick={handleNewPost}>
-                + 새 글 등록
-              </button>
+              <button className="btn btn-primary" onClick={handleNewPost}>+ 새 글 등록</button>
             </div>
           </div>
 
@@ -179,37 +184,25 @@ function App() {
               </div>
             )}
             {items.map((item) => (
-              <PostCard
-                key={item.id}
-                item={item}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
+              <PostCard key={item.id} item={item} onEdit={handleEdit} onDelete={handleDelete} />
             ))}
           </div>
         </main>
       )}
 
-      {/* SEARCH RESULTS */}
+      {/* ── 검색 결과 ───────────────────────────────────── */}
       {view === 'search' && (
         <main className="detail-view">
           <div className="detail-header">
-            <button className="btn btn-ghost back-btn" onClick={handleGoHome}>
-              ← 홈으로
-            </button>
+            <button className="btn btn-ghost back-btn" onClick={handleGoHome}>← 홈으로</button>
             <div className="detail-title-row">
               <div>
                 <h1>검색 결과</h1>
-                <p className="detail-subtitle">
-                  "{searchQuery}" — 전체 카테고리
-                </p>
+                <p className="detail-subtitle">"{searchQuery}" — 전체 카테고리</p>
               </div>
             </div>
             <div className="detail-toolbar">
-              <SearchBar
-                placeholder="전체 가이드 검색..."
-                onSearch={handleHomeSearch}
-              />
+              <SearchBar placeholder="전체 가이드 검색..." onSearch={handleHomeSearch} />
             </div>
           </div>
 
@@ -223,8 +216,10 @@ function App() {
             )}
             {items.map((item) => (
               <div key={item.id}>
-                <div className="result-category-badge"
-                  style={{ '--accent': CATEGORY_META[item.category].color } as React.CSSProperties}>
+                <div
+                  className="result-category-badge"
+                  style={{ '--accent': CATEGORY_META[item.category].color } as React.CSSProperties}
+                >
                   {CATEGORY_META[item.category].icon} {item.category}
                 </div>
                 <PostCard item={item} onEdit={handleEdit} onDelete={handleDelete} />
@@ -234,7 +229,7 @@ function App() {
         </main>
       )}
 
-      {/* FORM MODAL */}
+      {/* ── 폼 모달 ─────────────────────────────────────── */}
       {showForm && (
         <PostForm
           initialData={editingItem ?? undefined}
