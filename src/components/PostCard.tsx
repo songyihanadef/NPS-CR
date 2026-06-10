@@ -29,9 +29,66 @@ function hasHtmlTag(value: string) {
   return /<[^>]+>/.test(value);
 }
 
+
+const URL_REGEX = /(https?:\/\/[^\s<>\"']+)/g;
+
+function splitTrailingPunctuation(url: string) {
+  const match = url.match(/[.,!?;:)\]]+$/);
+  if (!match) return { cleanUrl: url, trailing: '' };
+  const trailing = match[0];
+  return {
+    cleanUrl: url.slice(0, -trailing.length),
+    trailing
+  };
+}
+
+function makeAutoLinkHtml(url: string) {
+  const { cleanUrl, trailing } = splitTrailingPunctuation(url);
+  const safeUrl = escapeHtml(cleanUrl);
+  return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="auto-link">${safeUrl}</a>${escapeHtml(trailing)}`;
+}
+
+function linkifyPlainText(text: string) {
+  return escapeHtml(text).replace(URL_REGEX, (url) => makeAutoLinkHtml(url));
+}
+
+function linkifyHtmlContent(html: string) {
+  if (typeof document === 'undefined') return html;
+
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  let node = walker.nextNode();
+
+  while (node) {
+    const parentElement = node.parentElement;
+    const shouldSkip =
+      parentElement?.closest('a') ||
+      parentElement?.closest('script') ||
+      parentElement?.closest('style');
+
+    if (!shouldSkip && URL_REGEX.test(node.textContent ?? '')) {
+      textNodes.push(node as Text);
+    }
+    URL_REGEX.lastIndex = 0;
+    node = walker.nextNode();
+  }
+
+  textNodes.forEach((textNode) => {
+    const text = textNode.textContent ?? '';
+    const wrapper = document.createElement('span');
+    wrapper.innerHTML = text.replace(URL_REGEX, (url) => makeAutoLinkHtml(url));
+    textNode.replaceWith(...Array.from(wrapper.childNodes));
+  });
+
+  return container.innerHTML;
+}
+
 function contentToHtml(content: string) {
-  if (hasHtmlTag(content)) return content;
-  return escapeHtml(content).replace(/\n/g, '<br>');
+  if (hasHtmlTag(content)) return linkifyHtmlContent(content);
+  return linkifyPlainText(content).replace(/\n/g, '<br>');
 }
 
 export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) => {

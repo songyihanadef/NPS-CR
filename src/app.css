@@ -1020,3 +1020,15 @@ p { line-height: 1.7; }
   .editor-toolbar button { font-size: 0.75rem; padding: 5px 8px; }
   .rich-editor { min-height: 160px; max-height: 360px; }
 }
+
+.auto-link {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+  font-weight: 600;
+}
+
+.auto-link:hover {
+  color: #1d4ed8;
+}
