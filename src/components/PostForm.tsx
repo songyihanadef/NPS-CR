@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { CATEGORIES, type Category, type NPSItem, type NPSFormData } from '../types';
+import {
+  CATEGORIES, type Category, type NPSItem, type NPSFormData, type PendingImageUpload,
+} from '../types';
 
 interface PostFormProps {
   initialData?: NPSItem;
   defaultCategory?: Category;
-  onSubmit: (data: NPSFormData, newImageFiles: File[]) => Promise<void>;
+  onSubmit: (data: NPSFormData, pendingImages: PendingImageUpload[]) => Promise<void>;
   onCancel: () => void;
-}
-
-interface PreviewImage {
-  key: string;
-  src: string;
-  file?: File;
-  savedUrl?: string;
 }
 
 const emptyForm: NPSFormData = {
@@ -26,6 +21,69 @@ const emptyForm: NPSFormData = {
   is_pinned: false,
 };
 
+function isAllowedImage(file: File) {
+  return ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function hasHtmlTag(value: string) {
+  return /<[^>]+>/.test(value);
+}
+
+function plainTextToHtml(value: string) {
+  return escapeHtml(value).replace(/\n/g, '<br>');
+}
+
+function contentHasImageUrl(content: string, url: string) {
+  return content.includes(url);
+}
+
+function buildInitialContent(item?: NPSItem) {
+  if (!item) return '';
+  let content = item.content ?? '';
+  if (content && !hasHtmlTag(content)) content = plainTextToHtml(content);
+
+  const imageUrls = item.image_urls ?? [];
+  const missingImages = imageUrls.filter((url) => !contentHasImageUrl(content, url));
+  if (missingImages.length > 0) {
+    const imageHtml = missingImages
+      .map((url) => `<p><img src="${url}" alt="첨부 이미지" class="content-inline-image"></p>`)
+      .join('');
+    content = `${content}${content ? '<br>' : ''}${imageHtml}`;
+  }
+  return content;
+}
+
+function insertHtmlAtCursor(html: string) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const fragment = template.content;
+  const lastNode = fragment.lastChild;
+  range.insertNode(fragment);
+
+  if (lastNode) {
+    const newRange = document.createRange();
+    newRange.setStartAfter(lastNode);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+  }
+  return true;
+}
+
 export const PostForm: React.FC<PostFormProps> = ({
   initialData,
   defaultCategory,
@@ -33,138 +91,143 @@ export const PostForm: React.FC<PostFormProps> = ({
   onCancel,
 }) => {
   const [form, setForm] = useState<NPSFormData>(emptyForm);
-  const [previews, setPreviews] = useState<PreviewImage[]>([]);
+  const [pendingImages, setPendingImages] = useState<PendingImageUpload[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [pasteFocus, setPasteFocus] = useState(false);
-  const [pasteFlash, setPasteFlash] = useState(false);
+  const [editorFocus, setEditorFocus] = useState(false);
+  const [editorFlash, setEditorFlash] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
-  const pasteZoneRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
 
-  // ── 초기값 세팅 ───────────────────────────────────────────────────────────
   useEffect(() => {
+    const initialContent = buildInitialContent(initialData);
     if (initialData) {
       setForm({
         category: initialData.category,
         title: initialData.title,
         description: initialData.description ?? '',
-        content: initialData.content ?? '',
+        content: initialContent,
         link: initialData.link ?? '',
         author: initialData.author ?? '',
         image_urls: initialData.image_urls ?? [],
         is_pinned: initialData.is_pinned ?? false,
       });
-      const existing: PreviewImage[] = (initialData.image_urls ?? []).map((url) => ({
-        key: url,
-        src: url,
-        savedUrl: url,
-      }));
-      setPreviews(existing);
-    } else if (defaultCategory) {
-      setForm((f) => ({ ...f, category: defaultCategory }));
-    }
-    return () => {
-      setPreviews((prev) => {
-        prev.forEach((p) => { if (p.file) URL.revokeObjectURL(p.src); });
-        return [];
+    } else {
+      setForm({
+        ...emptyForm,
+        category: defaultCategory ?? emptyForm.category,
       });
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    }
+  }, [initialData, defaultCategory]);
+
+  useEffect(() => () => {
+    pendingImages.forEach((item) => URL.revokeObjectURL(item.localUrl));
+  }, [pendingImages]);
+
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== form.content) {
+      editorRef.current.innerHTML = form.content;
+    }
+  }, [form.content]);
+
+  const updateContentFromEditor = useCallback(() => {
+    const html = editorRef.current?.innerHTML ?? '';
+    setForm((prev) => ({ ...prev, content: html }));
   }, []);
 
-  // ── 이미지 추가 헬퍼 ──────────────────────────────────────────────────────
-  const addImageFiles = useCallback((files: File[]) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    const imageFiles = files.filter((f) => allowedTypes.includes(f.type));
+  const focusEditor = () => {
+    editorRef.current?.focus();
+  };
 
+  const addImageFiles = useCallback((files: File[]) => {
+    const imageFiles = files.filter(isAllowedImage);
     if (!imageFiles.length) {
       setError('jpg, jpeg, png, webp 이미지 파일만 추가할 수 있습니다.');
       return;
     }
 
     setError('');
-    const newPreviews: PreviewImage[] = imageFiles.map((file) => {
-      const src = URL.createObjectURL(file);
-      return { key: src, src, file };
-    });
-    setPreviews((prev) => [...prev, ...newPreviews]);
-    setPasteFlash(true);
-    setTimeout(() => setPasteFlash(false), 600);
-  }, []);
+    focusEditor();
 
-  // ── 드래그 앤 드롭 이미지 추가 ───────────────────────────────────────────────
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    const newPending: PendingImageUpload[] = [];
+    imageFiles.forEach((file) => {
+      const localUrl = URL.createObjectURL(file);
+      newPending.push({ file, localUrl });
+      const imgHtml = `<p><img src="${localUrl}" alt="첨부 이미지" class="content-inline-image"></p><p><br></p>`;
+      const inserted = insertHtmlAtCursor(imgHtml);
+      if (!inserted && editorRef.current) {
+        editorRef.current.insertAdjacentHTML('beforeend', imgHtml);
+      }
+    });
+
+    setPendingImages((prev) => [...prev, ...newPending]);
+    updateContentFromEditor();
+    setEditorFlash(true);
+    setTimeout(() => setEditorFlash(false), 600);
+  }, [updateContentFromEditor]);
+
+  const handleEditorPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    const files = Array.from(e.clipboardData.items)
+      .filter((item) => item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter(Boolean) as File[];
+    if (!files.length) return;
+    e.preventDefault();
+    addImageFiles(files);
+  };
+
+  const handleEditorDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (!files.length) return;
     e.preventDefault();
     e.stopPropagation();
+    setDragOver(false);
+    addImageFiles(files);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
     setDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    e.stopPropagation();
     setDragOver(false);
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-    addImageFiles(Array.from(e.dataTransfer.files ?? []));
+  const runFormat = (command: string, value?: string) => {
+    focusEditor();
+    document.execCommand(command, false, value);
+    updateContentFromEditor();
   };
 
-  // ── 전역 paste 이벤트 ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const handleGlobalPaste = (e: ClipboardEvent) => {
-      const items = Array.from(e.clipboardData?.items ?? []);
-      const imageItems = items.filter((it) => it.type.startsWith('image/'));
-      if (!imageItems.length) return;
-      e.preventDefault();
-      const files = imageItems.map((it) => it.getAsFile()).filter(Boolean) as File[];
-      addImageFiles(files);
-    };
-    window.addEventListener('paste', handleGlobalPaste);
-    return () => window.removeEventListener('paste', handleGlobalPaste);
-  }, [addImageFiles]);
-
-  // ── 파일 선택 (보조) ──────────────────────────────────────────────────────
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    addImageFiles(Array.from(e.target.files ?? []));
-    e.target.value = '';
-  };
-
-  // ── 이미지 삭제 ───────────────────────────────────────────────────────────
-  const removeImage = (key: string) => {
-    setPreviews((prev) => {
-      const target = prev.find((p) => p.key === key);
-      if (target?.file) URL.revokeObjectURL(target.src);
-      return prev.filter((p) => p.key !== key);
-    });
-  };
-
-  // ── 텍스트 필드 변경 ──────────────────────────────────────────────────────
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  // ── 체크박스 변경 ─────────────────────────────────────────────────────────
   const handleCheckbox = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((f) => ({ ...f, [e.target.name]: e.target.checked }));
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.checked }));
   };
 
-  // ── 저장 ──────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    updateContentFromEditor();
+    const currentContent = editorRef.current?.innerHTML ?? form.content;
     if (!form.title.trim()) { setError('제목을 입력해주세요.'); return; }
+
     setLoading(true);
     setError('');
     try {
-      const keptUrls = previews.filter((p) => p.savedUrl).map((p) => p.savedUrl as string);
-      const newFiles = previews.filter((p) => p.file).map((p) => p.file as File);
-      await onSubmit({ ...form, image_urls: keptUrls }, newFiles);
+      const activePendingImages = pendingImages.filter((item) => currentContent.includes(item.localUrl));
+      const existingImageUrls = Array.from(currentContent.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi))
+        .map((match) => match[1])
+        .filter((url) => /^https?:\/\//i.test(url));
+
+      await onSubmit({ ...form, content: currentContent, image_urls: existingImageUrls }, activePendingImages);
+      activePendingImages.forEach((item) => URL.revokeObjectURL(item.localUrl));
     } catch {
       setError('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
@@ -172,10 +235,10 @@ export const PostForm: React.FC<PostFormProps> = ({
     }
   };
 
-  const newFilesCount = previews.filter((p) => p.file).length;
+  const newFilesCount = pendingImages.filter((item) => form.content.includes(item.localUrl)).length;
 
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div className="modal-overlay">
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{initialData ? '글 수정' : '새 글 등록'}</h2>
@@ -183,16 +246,13 @@ export const PostForm: React.FC<PostFormProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="post-form">
-
-          {/* 카테고리 */}
           <label className="field">
             <span>카테고리</span>
             <select name="category" value={form.category} onChange={handleChange}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
             </select>
           </label>
 
-          {/* 제목 */}
           <label className="field">
             <span>제목 <em>*</em></span>
             <input
@@ -201,7 +261,6 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
-          {/* 한 줄 설명 */}
           <label className="field">
             <span>한 줄 설명</span>
             <input
@@ -210,67 +269,37 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
-          {/* 상세 내용 */}
-          <label className="field">
-            <span>상세 내용</span>
-            <textarea
-              name="content" value={form.content} onChange={handleChange}
-              placeholder="상세 내용을 입력하세요" rows={6}
-            />
-          </label>
-
-          {/* 이미지 붙여넣기 영역 */}
           <div className="field">
-            <span>이미지</span>
+            <span>상세 내용</span>
+            <div className="editor-toolbar" onMouseDown={(e) => e.preventDefault()}>
+              <button type="button" onClick={() => runFormat('bold')}>B</button>
+              <button type="button" className="toolbar-red" onClick={() => runFormat('foreColor', '#EF4444')}>빨강</button>
+              <button type="button" className="toolbar-blue" onClick={() => runFormat('foreColor', '#2563EB')}>파랑</button>
+              <button type="button" className="toolbar-highlight" onClick={() => runFormat('backColor', '#FEF08A')}>형광펜</button>
+              <button type="button" onClick={() => runFormat('removeFormat')}>효과 지우기</button>
+            </div>
             <div
-              ref={pasteZoneRef}
-              className={`paste-zone ${pasteFocus ? 'focused' : ''} ${pasteFlash ? 'flash' : ''} ${dragOver ? 'drag-over' : ''}`}
-              tabIndex={0}
-              onFocus={() => setPasteFocus(true)}
-              onBlur={() => setPasteFocus(false)}
-              aria-label="이미지 붙여넣기 및 드래그 앤 드롭 영역"
+              ref={editorRef}
+              className={`rich-editor ${editorFocus ? 'focused' : ''} ${editorFlash ? 'flash' : ''} ${dragOver ? 'drag-over' : ''}`}
+              contentEditable
+              suppressContentEditableWarning
+              role="textbox"
+              aria-label="상세 내용 입력"
+              data-placeholder="상세 내용을 입력하세요. 이미지도 원하는 위치에 Ctrl+V 또는 드래그앤드롭으로 넣을 수 있습니다."
+              onInput={updateContentFromEditor}
+              onFocus={() => setEditorFocus(true)}
+              onBlur={() => { setEditorFocus(false); updateContentFromEditor(); }}
+              onPaste={handleEditorPaste}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              {previews.length === 0 ? (
-                <div className="paste-zone-empty">
-                  <span className="paste-icon">📋</span>
-                  <p>캡처 이미지는 <strong>Ctrl+V</strong>로 붙여넣거나 이미지 파일을 드래그해서 추가할 수 있습니다.</p>
-                  <p className="paste-hint">jpg, png, webp 파일을 여러 장 드래그해도 됩니다</p>
-                </div>
-              ) : (
-                <div className="paste-preview-grid">
-                  {previews.map((p) => (
-                    <div key={p.key} className="paste-preview-item">
-                      <img src={p.src} alt="미리보기" />
-                      {p.file && <span className="preview-badge new">NEW</span>}
-                      <button
-                        type="button" className="preview-remove"
-                        onClick={() => removeImage(p.key)} aria-label="이미지 삭제"
-                      >✕</button>
-                    </div>
-                  ))}
-                  <div
-                    className="paste-preview-add"
-                    onClick={() => fileInputRef.current?.click()}
-                    role="button" tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
-                    aria-label="이미지 추가"
-                  ><span>+</span></div>
-                </div>
-              )}
-            </div>
-            <input
-              ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple
-              style={{ display: 'none' }} onChange={handleFileInput}
+              onDrop={handleEditorDrop}
             />
+            <p className="editor-help">글을 쓰는 중 원하는 위치에 이미지를 Ctrl+V로 붙여넣거나 드래그해서 넣을 수 있습니다.</p>
             {newFilesCount > 0 && (
               <p className="paste-count">새 이미지 {newFilesCount}장이 추가되었습니다 (저장 시 업로드됩니다)</p>
             )}
           </div>
 
-          {/* 관련 링크 */}
           <label className="field">
             <span>관련 링크</span>
             <input
@@ -279,7 +308,6 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
-          {/* 작성자 */}
           <label className="field">
             <span>작성자</span>
             <input
@@ -288,7 +316,6 @@ export const PostForm: React.FC<PostFormProps> = ({
             />
           </label>
 
-          {/* ── 고정 여부 ──────────────────────────────────────────────────── */}
           <label className="field-checkbox">
             <input
               type="checkbox"
@@ -313,7 +340,6 @@ export const PostForm: React.FC<PostFormProps> = ({
                 : initialData ? '수정 완료' : '등록하기'}
             </button>
           </div>
-
         </form>
       </div>
     </div>

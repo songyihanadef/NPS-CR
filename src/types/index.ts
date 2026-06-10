@@ -58,3 +58,8 @@ export interface NPSFormData {
   image_urls: string[];
   is_pinned: boolean;
 }
+
+export interface PendingImageUpload {
+  file: File;
+  localUrl: string;
+}

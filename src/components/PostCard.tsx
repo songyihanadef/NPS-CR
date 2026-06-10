@@ -16,6 +16,24 @@ function isHttpUrl(value: string) {
   return /^https?:\/\//i.test(value.trim());
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function hasHtmlTag(value: string) {
+  return /<[^>]+>/.test(value);
+}
+
+function contentToHtml(content: string) {
+  if (hasHtmlTag(content)) return content;
+  return escapeHtml(content).replace(/\n/g, '<br>');
+}
+
 export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) => {
   const [expanded, setExpanded] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -23,6 +41,8 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
 
   const images = item.image_urls?.filter(Boolean) ?? [];
   const isPinned = item.is_pinned === true;
+  const content = item.content ?? '';
+  const contentHasInlineImage = /<img[^>]+src=/i.test(content);
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,8 +57,6 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
   return (
     <>
       <div className={`post-card ${expanded ? 'expanded' : ''} ${isPinned ? 'pinned' : ''}`}>
-
-        {/* ── 카드 헤더 ──────────────────────────────────────── */}
         <div className="post-card-top" onClick={() => setExpanded((v) => !v)}>
           <div className="post-card-info">
             <div className="post-title-row">
@@ -57,21 +75,16 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
           <span className={`expand-icon ${expanded ? 'open' : ''}`}>›</span>
         </div>
 
-        {/* ── 카드 본문 ──────────────────────────────────────── */}
         {expanded && (
           <div className="post-card-body">
-
-            {/* 텍스트 본문 */}
-            {item.content && (
-              <div className="post-content">
-                {item.content.split('\n').map((line, i) => (
-                  <p key={i}>{line || <br />}</p>
-                ))}
-              </div>
+            {content && (
+              <div
+                className="post-content rich-content"
+                dangerouslySetInnerHTML={{ __html: contentToHtml(content) }}
+              />
             )}
 
-            {/* 이미지 목록 */}
-            {images.length > 0 && (
+            {images.length > 0 && !contentHasInlineImage && (
               <div className="post-images">
                 {images.map((url, idx) => (
                   <a
@@ -93,7 +106,6 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
               </div>
             )}
 
-            {/* 관련 링크/텍스트 */}
             {item.link && (
               isHttpUrl(item.link) ? (
                 <a
@@ -113,7 +125,6 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
               )
             )}
 
-            {/* 수정 / 삭제 */}
             <div className="post-card-actions">
               <button
                 className="btn btn-sm btn-ghost"
@@ -128,12 +139,10 @@ export const PostCard: React.FC<PostCardProps> = ({ item, onEdit, onDelete }) =>
                 {confirmDelete ? '정말 삭제할까요?' : '삭제'}
               </button>
             </div>
-
           </div>
         )}
       </div>
 
-      {/* ── 라이트박스 ─────────────────────────────────────────── */}
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(null)}>
           <button className="lightbox-close" onClick={() => setLightbox(null)} aria-label="닫기">✕</button>

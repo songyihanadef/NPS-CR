@@ -2,13 +2,26 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   fetchItems, createItem, updateItem, deleteItem, uploadPastedImages,
 } from './lib/supabase';
-import { CATEGORIES, CATEGORY_META, type Category, type NPSItem, type NPSFormData } from './types';
+import {
+  CATEGORIES, CATEGORY_META, type Category, type NPSItem, type NPSFormData, type PendingImageUpload,
+} from './types';
 import { PostCard } from './components/PostCard';
 import { PostForm } from './components/PostForm';
 import { SearchBar } from './components/SearchBar';
 import './app.css';
 
 type View = 'home' | 'category' | 'search';
+
+function replaceAllLiteral(source: string, search: string, replacement: string) {
+  return source.split(search).join(replacement);
+}
+
+function extractImageUrlsFromHtml(html: string) {
+  const matches = Array.from(html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi));
+  return matches
+    .map((match) => match[1])
+    .filter((url) => /^https?:\/\//i.test(url));
+}
 
 function App() {
   const [view, setView] = useState<View>('home');
@@ -20,7 +33,6 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<NPSItem | null>(null);
 
-  // ── 목록 불러오기 ────────────────────────────────────────────────────────
   const loadItems = useCallback(async (category?: Category, query?: string) => {
     setLoading(true);
     setError('');
@@ -42,7 +54,6 @@ function App() {
     }
   }, [view, activeCategory, searchQuery, loadItems]);
 
-  // ── 네비게이션 ───────────────────────────────────────────────────────────
   const handleCategoryClick = (cat: Category) => {
     setActiveCategory(cat);
     setSearchQuery('');
@@ -64,19 +75,22 @@ function App() {
     setItems([]);
   };
 
-  // ── 저장 ─────────────────────────────────────────────────────────────────
-  const handleSubmit = async (data: NPSFormData, newImageFiles: File[]) => {
-    // 1) 새 이미지 Storage 업로드
+  const handleSubmit = async (data: NPSFormData, pendingImages: PendingImageUpload[]) => {
+    let content = data.content;
     let uploadedUrls: string[] = [];
-    if (newImageFiles.length > 0) {
-      uploadedUrls = await uploadPastedImages(newImageFiles);
+
+    if (pendingImages.length > 0) {
+      uploadedUrls = await uploadPastedImages(pendingImages.map((item) => item.file));
+      pendingImages.forEach((item, index) => {
+        const uploadedUrl = uploadedUrls[index];
+        if (uploadedUrl) content = replaceAllLiteral(content, item.localUrl, uploadedUrl);
+      });
     }
 
-    // 2) 최종 image_urls 병합
-    const finalImageUrls = [...data.image_urls, ...uploadedUrls];
-    const payload = { ...data, image_urls: finalImageUrls };
+    const inlineImageUrls = extractImageUrlsFromHtml(content);
+    const finalImageUrls = Array.from(new Set([...data.image_urls, ...uploadedUrls, ...inlineImageUrls]));
+    const payload = { ...data, content, image_urls: finalImageUrls };
 
-    // 3) DB 저장
     if (editingItem) {
       await updateItem(editingItem.id, payload);
     } else {
@@ -86,7 +100,6 @@ function App() {
     setShowForm(false);
     setEditingItem(null);
 
-    // 4) 목록 갱신
     if (view === 'category' && activeCategory) {
       loadItems(activeCategory, searchQuery || undefined);
     } else if (view === 'search') {
@@ -107,11 +120,8 @@ function App() {
 
   const handleNewPost = () => { setEditingItem(null); setShowForm(true); };
 
-  // ── 렌더 ─────────────────────────────────────────────────────────────────
   return (
     <div className="app">
-
-      {/* ══ 홈 ═══════════════════════════════════════════════════════════════ */}
       {view === 'home' && (
         <main className="home">
           <div className="home-hero">
@@ -146,7 +156,6 @@ function App() {
         </main>
       )}
 
-      {/* ══ 카테고리 상세 ════════════════════════════════════════════════════ */}
       {view === 'category' && activeCategory && (
         <main className="detail-view">
           <div className="detail-header">
@@ -184,7 +193,6 @@ function App() {
         </main>
       )}
 
-      {/* ══ 검색 결과 ════════════════════════════════════════════════════════ */}
       {view === 'search' && (
         <main className="detail-view">
           <div className="detail-header">
@@ -223,7 +231,6 @@ function App() {
         </main>
       )}
 
-      {/* ══ 글 등록/수정 폼 ══════════════════════════════════════════════════ */}
       {showForm && (
         <PostForm
           initialData={editingItem ?? undefined}
